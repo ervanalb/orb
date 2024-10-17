@@ -1,0 +1,106 @@
+(footprint "flex_seam_pad_small"
+	(version 20240108)
+	(generator "pcbnew")
+	(generator_version "8.0")
+	(layer "F.Cu")
+	(property "Reference" "REF**"
+		(at -3.5 -1 0)
+		(unlocked yes)
+		(layer "F.SilkS")
+		(hide yes)
+		(uuid "ec56da11-b9ef-4774-9395-eea95ee74df0")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.1)
+			)
+		)
+	)
+	(property "Value" "flex_seam_pad_small"
+		(at 0 1 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(uuid "7bdd78ec-b76a-4af6-b2d2-109fd45cf9b4")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "f5f4ae2b-4d66-41b0-8618-b10c50850b71")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "50919cef-e00e-48ae-b136-144eebf5a58d")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" ""
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "043ce6fc-7deb-435a-90cd-e984788a5669")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr smd exclude_from_pos_files exclude_from_bom dnp)
+	(fp_text user "${DESCRIPTION}"
+		(at 2.5 0 -90)
+		(unlocked yes)
+		(layer "B.SilkS")
+		(uuid "6b4a42d7-811d-41ff-9982-ee151b411acb")
+		(effects
+			(font
+				(size 0.6 0.6)
+				(thickness 0.15)
+				(bold yes)
+			)
+			(justify bottom mirror)
+		)
+	)
+	(fp_text user "${REFERENCE}"
+		(at 0 2.5 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(uuid "65065f23-6a61-4c97-9e31-0b1a175ede41")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(pad "1" smd roundrect
+		(at 1.1 0)
+		(size 2 1.2)
+		(layers "B.Cu" "B.Mask")
+		(roundrect_rratio 0.5)
+		(chamfer_ratio 0.05)
+		(chamfer top_left bottom_left)
+		(uuid "44aed719-50aa-48c8-bf3a-a849102ffe77")
+	)
+)

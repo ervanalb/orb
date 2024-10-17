@@ -67,7 +67,7 @@
 			)
 		)
 	)
-	(attr smd)
+	(attr smd exclude_from_pos_files exclude_from_bom dnp)
 	(fp_text user "${DESCRIPTION}"
 		(at 4 0 -90)
 		(unlocked yes)

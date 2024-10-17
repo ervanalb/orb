@@ -13,7 +13,14 @@ import re
 #fig = plt.figure()
 #ax = fig.add_subplot(projection='3d')
 
+KICAD_FLIP = np.array([1, -1]) # Kicad Y is positive down
+
+# Overall radius of sphere
 radius = 50
+
+# Flat pattern: Offset each polygon inward slightly to add clearance for board edges
+offset_dist = -0.05 # mm
+circle_r = 0.65 # mm
 
 (vs, es, fs) = geo.sphere(u=3, v=0)
 
@@ -167,7 +174,7 @@ dvs = flatten_faces(dvs, dfs, face_normals, face_ds)
 #            [dvs[dvi1][2], dvs[dvi2][2]],
 #        )
 
-(vs, es, fs) = geo.sphere(u=2, v=1, base=vs)
+(vs, es, fs) = geo.sphere(u=4, v=3, base=vs)
 
 vs = np.array(vs) * radius
 dvs = np.array(dvs) * radius
@@ -366,7 +373,7 @@ def led_placement(vs, face_fine_routing, v_fis, coarse_vs, coarse_es, coarse_fs,
         m[0:3, 2] = z
         m[0:3, 3] = t
 
-        # Flip increments of 180 degrees if it fits routing better
+        # Flip increments of 90 degrees if it fits routing better
         (fine_routing, _) = face_fine_routing[coarse_fi]
         i = fine_routing.index(vi)
         prev_pt = vs[fine_routing[i - 1]] if i > 0 else None
@@ -392,9 +399,9 @@ def led_placement(vs, face_fine_routing, v_fis, coarse_vs, coarse_es, coarse_fs,
         ])
         possible_rotations = [
             np.eye(4),
-            #rot_90,
+            rot_90,
             rot_90 @ rot_90,
-            #rot_90 @ rot_90 @ rot_90,
+            rot_90 @ rot_90 @ rot_90,
         ]
 
         possible_orientations = [m @ r for r in possible_rotations]
@@ -409,7 +416,7 @@ def led_placement(vs, face_fine_routing, v_fis, coarse_vs, coarse_es, coarse_fs,
 
     return [place_one_led(vi) for vi in range(len(vs))]
 
-led_matrices = led_placement(vs, face_fine_routing, v_fis, dvs, des, dfs, face_normals, face_order, edge_order, footprint_data_direction_vector=[-1, .8])
+led_matrices = led_placement(vs, face_fine_routing, v_fis, dvs, des, dfs, face_normals, face_order, edge_order, footprint_data_direction_vector=[1, 1])
 
 # Draw the result
 
@@ -897,8 +904,8 @@ def export_board_outline(vs, es, fs, nets):
 
         for (ei, (vi1, vi2)) in enumerate(es):
             if ei not in shared_edges and vi1 in allow_vertices and vi2 in allow_vertices:
-                start = xf(vs[vi1])[0:2]
-                end = xf(vs[vi2])[0:2]
+                start = xf(vs[vi1])[0:2] * KICAD_FLIP
+                end = xf(vs[vi2])[0:2] * KICAD_FLIP
                 flat_edges_points.append((start, end))
 
     flat_vertices = []
@@ -958,10 +965,6 @@ def export_board_outline(vs, es, fs, nets):
             polygon = list(reversed(polygon))
 
         polygons.append(polygon) 
-
-    # Offset each polygon inward slightly to add clearance for board edges
-    offset_dist = -0.1 # mm
-    circle_r = 1.1 # mm
 
     #def offset_v(vi_prev, vi, vi_next):
     #    rot90 = np.array([[0, 1], [-1, 0]])
@@ -1060,7 +1063,7 @@ def export_board_outline(vs, es, fs, nets):
         (uuid "07f8a733-4d93-41dd-8ef6-34681b09ab16")
         (hatch edge 0.5)
         (connect_pads
-            (clearance 0.3)
+            (clearance 0.2)
         )
         (min_thickness 0.2)
         (filled_areas_thickness no)
@@ -1081,7 +1084,7 @@ def export_board_outline(vs, es, fs, nets):
         (uuid "07f8a733-4d93-41dd-8ef6-34681b09ab16")
         (hatch edge 0.5)
         (connect_pads
-            (clearance 0.3)
+            (clearance 0.2)
         )
         (min_thickness 0.2)
         (filled_areas_thickness no)
@@ -1117,16 +1120,29 @@ def export_board_folds(vs, es, fs):
             if ei in remaining_shared_edges and vi1 in allow_vertices and vi2 in allow_vertices:
                 remaining_shared_edges.remove(ei)
 
-                start = xf(vs[vi1])
-                end = xf(vs[vi2])
+                start = xf(vs[vi1])[0:2] * KICAD_FLIP
+                end = xf(vs[vi2])[0:2] * KICAD_FLIP
 
-                # Shrink a bit away from the edges
-                offset_start = 0.9 * start + 0.1 * end
-                offset_end = 0.9 * end + 0.1 * start
+                tangent = end - start
+                tangent = circle_r * tangent / np.linalg.norm(tangent)
+
+                # Shrink to avoid circle edge cuts
+                line_start = start + tangent
+                line_end = end - tangent
+
+                width = 0.1
+
+                normal = np.array([[0, -1], [1, 0]]) @ (line_end - line_start)
+                normal = 0.5 * width * normal / np.linalg.norm(normal)
+
+                rect_1 = line_start - normal
+                rect_2 = line_end - normal
+                rect_3 = line_end + normal
+                rect_4 = line_start + normal
 
                 export += f"""    (gr_line
-        (start {offset_start[0]:.3f} {offset_start[1]:.3f})
-        (end {offset_end[0]:.3f} {offset_end[1]:.3f})
+        (start {line_start[0]:.3f} {line_start[1]:.3f})
+        (end {line_end[0]:.3f} {line_end[1]:.3f})
         (stroke
             (width 0.12)
 			(type dash)
@@ -1135,8 +1151,8 @@ def export_board_folds(vs, es, fs):
         (uuid "{make_uuid()}")
     )
     (gr_line
-        (start {offset_start[0]:.3f} {offset_start[1]:.3f})
-        (end {offset_end[0]:.3f} {offset_end[1]:.3f})
+        (start {line_start[0]:.3f} {line_start[1]:.3f})
+        (end {line_end[0]:.3f} {line_end[1]:.3f})
         (stroke
             (width 0.12)
 			(type dash)
@@ -1144,15 +1160,48 @@ def export_board_folds(vs, es, fs):
         (layer "B.SilkS")
         (uuid "{make_uuid()}")
     )
+	(zone
+		(net 0)
+		(net_name "")
+		(layers "F&B.Cu")
+		(uuid "{make_uuid()}")
+		(hatch edge 0.5)
+		(connect_pads
+			(clearance 0)
+		)
+		(min_thickness 0.25)
+		(filled_areas_thickness no)
+		(keepout
+			(tracks not_allowed)
+			(vias not_allowed)
+			(pads not_allowed)
+			(copperpour allowed)
+			(footprints allowed)
+		)
+		(fill
+			(thermal_gap 0.5)
+			(thermal_bridge_width 0.5)
+		)
+		(polygon
+			(pts
+				(xy {rect_1[0]:.3f} {rect_1[1]:.3f})
+				(xy {rect_2[0]:.3f} {rect_2[1]:.3f})
+				(xy {rect_3[0]:.3f} {rect_3[1]:.3f})
+				(xy {rect_4[0]:.3f} {rect_4[1]:.3f})
+			)
+		)
+	)
 """
+
     return export
 
 def export_one_footprint(footprint_file_content, m, ref, pad_nets, other_replacements=None):
     if other_replacements is None:
         other_replacements = {}
 
-    pos = m[0:2, 3]
-    angle = -np.rad2deg(np.atan2(m[1, 0], m[0, 0]))
+    pos = m[0:2, 3] * KICAD_FLIP
+    xvec = (np.linalg.inv(m) @ np.array([1, 0, 0, 0]))[0:2] * KICAD_FLIP
+    angle = np.rad2deg(np.atan2(xvec[1], xvec[0]))
     angle = ((angle % 360) + 360) % 360
 
     footprint_lines = footprint_file_content.split("\n")
@@ -1328,52 +1377,6 @@ def export_board_seam_pads(vs, es, fs, fine_vs, unfolded_matrices, edge_labels, 
             led = f"LED{vertex_order[-1]}"
             nets.append(f"({led}-DO)({edge_pad})")
 
-def export_board_zones():
-    
-
-    export += f"""    (zone
-        (net {vcc_num})
-        (net_name "{vcc_name}")
-        (layer "F.Cu")
-        (uuid "07f8a733-4d93-41dd-8ef6-34681b09ab16")
-        (hatch edge 0.5)
-        (connect_pads
-            (clearance 0.3)
-        )
-        (min_thickness 0.2)
-        (filled_areas_thickness no)
-        (fill
-            (thermal_gap 0.3)
-            (thermal_bridge_width 0.2)
-        )
-        (polygon
-            (pts
-                (xy -99.5 -100) (xy 100.5 -101) (xy 100 99.5) (xy -100 99.5)
-            )
-        )
-    )
-    (zone
-        (net {gnd_num})
-        (net_name "{gnd_name}")
-        (layer "B.Cu")
-        (uuid "07f8a733-4d93-41dd-8ef6-34681b09ab16")
-        (hatch edge 0.5)
-        (connect_pads
-            (clearance 0.3)
-        )
-        (min_thickness 0.2)
-        (filled_areas_thickness no)
-        (fill
-            (thermal_gap 0.3)
-            (thermal_bridge_width 0.2)
-        )
-        (polygon
-            (pts
-                (xy -99.5 -100) (xy 100.5 -101) (xy 100 99.5) (xy -100 99.5)
-            )
-        )
-    )
-"""
 
 def export_board_postamble():
     return """)
@@ -1387,11 +1390,11 @@ def export_board(coarse_vs, coarse_es, coarse_fs, vs, face_order, edge_order, un
         export_board_outline(coarse_vs, coarse_es, coarse_fs, nets),
         export_board_folds(coarse_vs, coarse_es, coarse_fs),
         export_board_leds(coarse_vs, coarse_fs, unfolded_matrices, v_fis, led_matrices, nets,
-            footprint_file="lib.pretty/LED_SK6812_Mini_3535.kicad_mod",
-            pad_functions={"1": "DO", "2": "VCC", "3": "DI", "4": "GND"},
+            footprint_file="lib.pretty/LED_SK6805_EC10_1111.kicad_mod",
+            pad_functions={"1": "GND", "2": "DI", "3": "VCC", "4": "DO"},
         ),
         export_board_seam_pads(coarse_vs, coarse_es, coarse_fs, vs, unfolded_matrices, edge_labels, v_fis, face_order, edge_order, nets,
-            footprint_file="lib.pretty/flex_seam_pad.kicad_mod",
+            footprint_file="lib.pretty/flex_seam_pad_small.kicad_mod",
         ),
         export_board_postamble(),
     ])
