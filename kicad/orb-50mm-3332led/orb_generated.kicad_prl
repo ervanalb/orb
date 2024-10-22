@@ -1,6 +1,6 @@
 {
   "board": {
-    "active_layer": 44,
+    "active_layer": 0,
     "active_layer_preset": "",
     "auto_track_width": true,
     "hidden_netclasses": [],
@@ -8,7 +8,7 @@
     "high_contrast_mode": 0,
     "net_color_mode": 1,
     "opacity": {
-      "images": 0.6,
+      "images": 0.6000000238418579,
       "pads": 1.0,
       "tracks": 1.0,
       "vias": 1.0,
@@ -47,7 +47,6 @@
       21,
       22,
       23,
-      24,
       25,
       26,
       27,

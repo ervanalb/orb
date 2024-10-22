@@ -888,7 +888,7 @@ def net_name_for_pad(nets, pad):
         if f"({pad})" in net:
             return net_name
 
-def export_board_outline(vs, es, fs, nets):
+def export_board_outline(vs, es, fs, nets, corner_circles=True):
     # Draw lines on the Edge.Cuts layer
     # in the shape of the boards
 
@@ -966,86 +966,103 @@ def export_board_outline(vs, es, fs, nets):
 
         polygons.append(polygon) 
 
-    #def offset_v(vi_prev, vi, vi_next):
-    #    rot90 = np.array([[0, 1], [-1, 0]])
-
-    #    vp = np.array(flat_vertices[vi_prev])
-    #    v = np.array(flat_vertices[vi])
-    #    vn = np.array(flat_vertices[vi_next])
-
-    #    offset_p = rot90 @ (v - vp)
-    #    offset_p = offset_dist * offset_p / np.linalg.norm(offset_p)
-    #    offset_n = rot90 @ (vn - v)
-    #    offset_n = offset_dist * offset_n / np.linalg.norm(offset_n)
-
-    #    def line_through(pt1, pt2):
-    #        # Line through 2 points represented in homogeneous line coordinates
-    #        n = rot90 @ (pt2 - pt1)
-    #        n = n / np.linalg.norm(n)
-    #        d = np.dot(pt1, n)
-    #        l = np.array(n.tolist() + [-d])
-    #        return l
-
-    #    lp = line_through(vp + offset_p, v + offset_p)
-    #    ln = line_through(v + offset_n, vn + offset_n)
-
-    #    # Find the intersection of the two offset lines
-    #    pt = np.cross(lp, ln)
-    #    pt = pt[0:2] / pt[2]
-
-    #    return pt
-
-    #offset_flat_vertices = [None] * len(flat_vertices)
-    #for polygon in polygons:
-    #    for (vi_prev, vi, vi_next) in zip([polygon[-1]] + polygon[:-1], polygon, polygon[1:] + [polygon[0]]):
-    #        assert offset_flat_vertices[vi] is None
-    #        offset_flat_vertices[vi] = offset_v(vi_prev, vi, vi_next)
-
     export = ""
 
-    angular_offset = np.asin(offset_dist / circle_r)
+    if corner_circles:
+        angular_offset = np.asin(offset_dist / circle_r)
+        for polygon in polygons:
+            for (vi1, vi2, vi3) in zip([polygon[-1]] + polygon[:-1], polygon, polygon[1:] + [polygon[0]]):
+                circle_center = flat_vertices[vi2]
+                circle_start_vector = flat_vertices[vi1] - flat_vertices[vi2]
+                circle_start_angle = np.atan2(circle_start_vector[1], circle_start_vector[0]) + angular_offset
+                circle_end_vector = flat_vertices[vi3] - flat_vertices[vi2]
+                circle_end_angle = np.atan2(circle_end_vector[1], circle_end_vector[0]) - angular_offset
+                circle_swept_angle = (((circle_start_angle - circle_end_angle) % (2*np.pi)) + (2*np.pi)) % (2*np.pi)
+                circle_mid_angle = circle_end_angle + 0.5 * circle_swept_angle
 
-    for polygon in polygons:
-        for (vi1, vi2, vi3) in zip([polygon[-1]] + polygon[:-1], polygon, polygon[1:] + [polygon[0]]):
-            circle_center = flat_vertices[vi2]
-            circle_start_vector = flat_vertices[vi1] - flat_vertices[vi2]
-            circle_start_angle = np.atan2(circle_start_vector[1], circle_start_vector[0]) + angular_offset
-            circle_end_vector = flat_vertices[vi3] - flat_vertices[vi2]
-            circle_end_angle = np.atan2(circle_end_vector[1], circle_end_vector[0]) - angular_offset
-            circle_swept_angle = (((circle_start_angle - circle_end_angle) % (2*np.pi)) + (2*np.pi)) % (2*np.pi)
-            circle_mid_angle = circle_end_angle + 0.5 * circle_swept_angle
+                circle_start_pt = circle_center + circle_r * np.array([np.cos(circle_start_angle), np.sin(circle_start_angle)])
+                circle_end_pt = circle_center + circle_r * np.array([np.cos(circle_end_angle), np.sin(circle_end_angle)])
+                circle_mid_pt = circle_center + circle_r * np.array([np.cos(circle_mid_angle), np.sin(circle_mid_angle)])
 
-            circle_start_pt = circle_center + circle_r * np.array([np.cos(circle_start_angle), np.sin(circle_start_angle)])
-            circle_end_pt = circle_center + circle_r * np.array([np.cos(circle_end_angle), np.sin(circle_end_angle)])
-            circle_mid_pt = circle_center + circle_r * np.array([np.cos(circle_mid_angle), np.sin(circle_mid_angle)])
+                next_circle_center = flat_vertices[vi3]
+                next_circle_start_vector = flat_vertices[vi2] - flat_vertices[vi3]
+                next_circle_start_angle = np.atan2(next_circle_start_vector[1], next_circle_start_vector[0]) + angular_offset
+                next_circle_start_pt = next_circle_center + circle_r * np.array([np.cos(next_circle_start_angle), np.sin(next_circle_start_angle)])
 
-            next_circle_center = flat_vertices[vi3]
-            next_circle_start_vector = flat_vertices[vi2] - flat_vertices[vi3]
-            next_circle_start_angle = np.atan2(next_circle_start_vector[1], next_circle_start_vector[0]) + angular_offset
-            next_circle_start_pt = next_circle_center + circle_r * np.array([np.cos(next_circle_start_angle), np.sin(next_circle_start_angle)])
-
-            export += f"""        (gr_arc
-            (start {circle_start_pt[0]:.3f} {circle_start_pt[1]:.3f})
-            (mid {circle_mid_pt[0]:.3f} {circle_mid_pt[1]:.3f})
-            (end {circle_end_pt[0]:.3f} {circle_end_pt[1]:.3f})
-            (stroke
-                (width 0.05)
-                (type default)
+                export += f"""        (gr_arc
+                (start {circle_start_pt[0]:.3f} {circle_start_pt[1]:.3f})
+                (mid {circle_mid_pt[0]:.3f} {circle_mid_pt[1]:.3f})
+                (end {circle_end_pt[0]:.3f} {circle_end_pt[1]:.3f})
+                (stroke
+                    (width 0.05)
+                    (type default)
+                )
+                (layer "Edge.Cuts")
+                (uuid "{make_uuid()}")
             )
-            (layer "Edge.Cuts")
-            (uuid "{make_uuid()}")
-        )
-        (gr_line
-            (start {circle_end_pt[0]:.3f} {circle_end_pt[1]:.3f})
-            (end {next_circle_start_pt[0]:.3f} {next_circle_start_pt[1]:.3f})
-            (stroke
-                (width 0.05)
-                (type default)
+            (gr_line
+                (start {circle_end_pt[0]:.3f} {circle_end_pt[1]:.3f})
+                (end {next_circle_start_pt[0]:.3f} {next_circle_start_pt[1]:.3f})
+                (stroke
+                    (width 0.05)
+                    (type default)
+                )
+                (layer "Edge.Cuts")
+                (uuid "{make_uuid()}")
             )
-            (layer "Edge.Cuts")
-            (uuid "{make_uuid()}")
-        )
 """
+    else:
+        def offset_v(vi_prev, vi, vi_next):
+            rot90 = np.array([[0, 1], [-1, 0]])
+
+            vp = np.array(flat_vertices[vi_prev])
+            v = np.array(flat_vertices[vi])
+            vn = np.array(flat_vertices[vi_next])
+
+            offset_p = rot90 @ (v - vp)
+            offset_p = offset_dist * offset_p / np.linalg.norm(offset_p)
+            offset_n = rot90 @ (vn - v)
+            offset_n = offset_dist * offset_n / np.linalg.norm(offset_n)
+
+            def line_through(pt1, pt2):
+                # Line through 2 points represented in homogeneous line coordinates
+                n = rot90 @ (pt2 - pt1)
+                n = n / np.linalg.norm(n)
+                d = np.dot(pt1, n)
+                l = np.array(n.tolist() + [-d])
+                return l
+
+            lp = line_through(vp + offset_p, v + offset_p)
+            ln = line_through(v + offset_n, vn + offset_n)
+
+            # Find the intersection of the two offset lines
+            pt = np.cross(lp, ln)
+            pt = pt[0:2] / pt[2]
+
+            return pt
+
+        offset_flat_vertices = [None] * len(flat_vertices)
+        for polygon in polygons:
+            for (vi_prev, vi, vi_next) in zip([polygon[-1]] + polygon[:-1], polygon, polygon[1:] + [polygon[0]]):
+                assert offset_flat_vertices[vi] is None
+                offset_flat_vertices[vi] = offset_v(vi_prev, vi, vi_next)
+
+            for (vi1, vi2) in zip(polygon, polygon[1:] + [polygon[0]]):
+                start = offset_flat_vertices[vi1]
+                end = offset_flat_vertices[vi2]
+
+                export += f"""            (gr_line
+                (start {start[0]:.3f} {start[1]:.3f})
+                (end {end[0]:.3f} {end[1]:.3f})
+                (stroke
+                    (width 0.05)
+                    (type default)
+                )
+                (layer "Edge.Cuts")
+                (uuid "{make_uuid()}")
+            )
+"""
+
 
     # Add filled zones
     (gnd_num, gnd_name) = nets["GND"].split(" ")
@@ -1130,7 +1147,7 @@ def export_board_folds(vs, es, fs):
                 line_start = start + tangent
                 line_end = end - tangent
 
-                width = 0.1
+                width = 0.4 # 0.2 clearance on both sides
 
                 normal = np.array([[0, -1], [1, 0]]) @ (line_end - line_start)
                 normal = 0.5 * width * normal / np.linalg.norm(normal)
@@ -1386,16 +1403,16 @@ def export_board(coarse_vs, coarse_es, coarse_fs, vs, face_order, edge_order, un
     nets = generate_board_nets(coarse_vs, coarse_es, coarse_fs, vs, face_order, edge_order)
     content = "".join([
         export_board_preamble(),
-        export_board_nets(nets),
-        export_board_outline(coarse_vs, coarse_es, coarse_fs, nets),
+        #export_board_nets(nets),
+        #export_board_outline(coarse_vs, coarse_es, coarse_fs, nets),
         export_board_folds(coarse_vs, coarse_es, coarse_fs),
-        export_board_leds(coarse_vs, coarse_fs, unfolded_matrices, v_fis, led_matrices, nets,
-            footprint_file="lib.pretty/LED_SK6805_EC10_1111.kicad_mod",
-            pad_functions={"1": "GND", "2": "DI", "3": "VCC", "4": "DO"},
-        ),
-        export_board_seam_pads(coarse_vs, coarse_es, coarse_fs, vs, unfolded_matrices, edge_labels, v_fis, face_order, edge_order, nets,
-            footprint_file="lib.pretty/flex_seam_pad_small.kicad_mod",
-        ),
+        #export_board_leds(coarse_vs, coarse_fs, unfolded_matrices, v_fis, led_matrices, nets,
+        #    footprint_file="lib.pretty/LED_SK6805_EC10_1111.kicad_mod",
+        #    pad_functions={"1": "GND", "2": "DI", "3": "VCC", "4": "DO"},
+        #),
+        #export_board_seam_pads(coarse_vs, coarse_es, coarse_fs, vs, unfolded_matrices, edge_labels, v_fis, face_order, edge_order, nets,
+        #    footprint_file="lib.pretty/flex_seam_pad_small.kicad_mod",
+        #),
         export_board_postamble(),
     ])
     with open(filename, "w") as f:
