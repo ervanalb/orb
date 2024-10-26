@@ -1403,19 +1403,103 @@ def export_board(coarse_vs, coarse_es, coarse_fs, vs, face_order, edge_order, un
     nets = generate_board_nets(coarse_vs, coarse_es, coarse_fs, vs, face_order, edge_order)
     content = "".join([
         export_board_preamble(),
-        #export_board_nets(nets),
-        #export_board_outline(coarse_vs, coarse_es, coarse_fs, nets),
+        export_board_nets(nets),
+        export_board_outline(coarse_vs, coarse_es, coarse_fs, nets),
         export_board_folds(coarse_vs, coarse_es, coarse_fs),
-        #export_board_leds(coarse_vs, coarse_fs, unfolded_matrices, v_fis, led_matrices, nets,
-        #    footprint_file="lib.pretty/LED_SK6805_EC10_1111.kicad_mod",
-        #    pad_functions={"1": "GND", "2": "DI", "3": "VCC", "4": "DO"},
-        #),
-        #export_board_seam_pads(coarse_vs, coarse_es, coarse_fs, vs, unfolded_matrices, edge_labels, v_fis, face_order, edge_order, nets,
-        #    footprint_file="lib.pretty/flex_seam_pad_small.kicad_mod",
-        #),
+        export_board_leds(coarse_vs, coarse_fs, unfolded_matrices, v_fis, led_matrices, nets,
+            footprint_file="lib.pretty/LED_SK6805_EC10_1111.kicad_mod",
+            pad_functions={"1": "GND", "2": "DI", "3": "VCC", "4": "DO"},
+        ),
+        export_board_seam_pads(coarse_vs, coarse_es, coarse_fs, vs, unfolded_matrices, edge_labels, v_fis, face_order, edge_order, nets,
+            footprint_file="lib.pretty/flex_seam_pad_small.kicad_mod",
+        ),
         export_board_postamble(),
     ])
     with open(filename, "w") as f:
         f.write(content)
 
-export_board(dvs, des, dfs, vs, face_order, edge_order, unfolded_matrices, v_fis, led_matrices, edge_labels, filename="kicad/orb/orb_generated.kicad_pcb")
+#export_board(dvs, des, dfs, vs, face_order, edge_order, unfolded_matrices, v_fis, led_matrices, edge_labels, filename="kicad/orb/orb_generated.kicad_pcb")
+
+
+def export_skeleton(vs, es, fs, filename):
+    import solid
+    import solid.utils
+
+    vs = np.array(vs)
+
+    vms = geo.vertex_matrices(vs)
+    ems = geo.edge_matrices(es, vs)
+    #fms = geo.face_matrices(fs, vs)
+
+    def triangulate_face(f):
+        # F is not in order, unfortunately. Lets put it in order.
+
+        centroid = np.mean(vs[f], axis=0)
+        z = centroid / np.linalg.norm(centroid)
+        up = vs[f[0]] - centroid
+        up = up / np.linalg.norm(up)
+        vec = vs[f] - centroid
+        vec = vec / np.linalg.norm(vec)
+        sort_ixs = np.argsort(np.atan2(np.dot(np.cross(vec, up), z), np.dot(vec, up)))
+
+        f = np.array(f)[sort_ixs]
+
+        if len(f) == 5:
+            return [
+                [f[0], f[1], f[2]],
+                [f[0], f[2], f[3]],
+                [f[0], f[3], f[4]],
+            ]
+        elif len(f) == 6:
+            return [
+                [f[0], f[1], f[2]],
+                [f[0], f[2], f[3]],
+                [f[0], f[3], f[4]],
+                [f[0], f[4], f[5]],
+            ]
+        else:   
+            assert False, "Only pentagons & hexagons supported"
+
+    def face_matrix(f):
+        centroid = np.mean(vs[f], axis=0)
+        z = centroid / np.linalg.norm(centroid)
+        x = vs[f[0]] - centroid
+        x = x / np.linalg.norm(x)
+        y = np.cross(z, x)
+
+        m = np.eye(4)
+        m[0:3, 0] = x
+        m[0:3, 1] = y
+        m[0:3, 2] = z
+        m[0:3, 3] = centroid
+        return m
+
+    # Create shell
+    CLEARANCE = 0.2
+    tfs = [tf for f in fs for tf in triangulate_face(f)]
+    norm_vs = (1. / np.linalg.norm(vs, axis=1))[:, None] * vs
+    outside = solid.polyhedron(vs - norm_vs * CLEARANCE, tfs)
+    inside = solid.polyhedron(vs - norm_vs * 2, tfs)
+
+    # Add cylinder for each vertex to act as a pin
+    def pin_at_vertex(vm):
+        return solid.multmatrix(vm)(solid.cylinder(r=0.5, h=2, center=True))
+
+    vertex_pins = [pin_at_vertex(vm) for vm in vms]
+
+    # Add a cylindrical cutout at each edge for soldering the tabs
+
+    def cutout(m):
+        return solid.multmatrix(m)(solid.cylinder(r=3, h=10, center=True, segments=24))
+
+    edge_cutouts = [cutout(em @ np.diag([1., 1.3, 1., 1.])) for em in ems]
+    face_cutouts = [cutout(face_matrix(f)) for f in fs]
+
+    shape = solid.union()(solid.difference()(outside, solid.union()(inside, *edge_cutouts, *face_cutouts)), *vertex_pins)
+
+    partial_tool = solid.translate([0, 0, 50])(solid.cube(100, center=True))
+    partial_shape = solid.intersection()(shape, partial_tool)
+
+    solid.scad_render_to_file(partial_shape, 'skeleton.scad')
+
+export_skeleton(dvs, des, dfs, filename="skeleton.scad")
